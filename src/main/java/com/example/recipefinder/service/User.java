@@ -1,6 +1,10 @@
-package com.example.recipefinder.entity;
+package com.example.recipefinder.service;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "users")
@@ -10,25 +14,22 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String username; 
-
-    @Column(unique = true) 
+    private String username;
     private String email;
-
     private String password;
 
+    // Default Constructor (Hibernate ke liye zaroori hota hai)
     public User() {
     }
 
-   
-    public User(Long id, String username, String email, String password) {
-        this.id = id;
+    // Parameterized Constructor (Ooptional hai par object banane me kaam aata hai)
+    public User(String username, String email, String password) {
         this.username = username;
         this.email = email;
         this.password = password;
     }
 
-    
+    // Ekdum normal aur simple Getters aur Setters
     public Long getId() {
         return id;
     }

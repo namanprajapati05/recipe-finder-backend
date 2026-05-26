@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Service
@@ -18,30 +18,45 @@ public class RecipeService {
     @Value("${spoonacular.api.base-url}")
     private String baseUrl;
 
-    private final RestClient restClient = RestClient.create();
-    private final ObjectMapper objectMapper = new ObjectMapper(); // JSON parsing ke liye
-
-    // Purane search aur details wale methods waise hi rahenge...
-
-
-
+    
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+ 
 
     public String searchRecipes(String query) {
+        String url = UriComponentsBuilder.fromUriString(baseUrl)
+                .path("/recipes/complexSearch")
+                .queryParam("query", query)
+                .queryParam("apiKey", apiKey)
+                .queryParam("number", 10)
+                .toUriString();
 
-    String url = UriComponentsBuilder.fromUriString(baseUrl)
-            .path("/recipes/complexSearch")
-            .queryParam("query", query)
-            .queryParam("apiKey", apiKey)
-            .toUriString();
+        try {
+            //  JSON data
+            String rawJson = restTemplate.getForObject(url, String.class);
+            
+            JsonNode rootNode = objectMapper.readTree(rawJson);
+            JsonNode resultsNode = rootNode.path("results");
 
-    return restClient.get()
-            .uri(url)
-            .retrieve()
-            .body(String.class);
-}
+            ArrayNode filteredRecipes = objectMapper.createArrayNode();
 
+            if (resultsNode.isArray()) {
+                for (JsonNode recipe : resultsNode) {
+                    ObjectNode cleanRecipe = objectMapper.createObjectNode();
+                    cleanRecipe.put("id", recipe.path("id").asLong());
+                    cleanRecipe.put("title", recipe.path("title").asText());
+                    cleanRecipe.put("image", recipe.path("image").asText());
+                    filteredRecipes.add(cleanRecipe);
+                }
+            }
+            return objectMapper.writeValueAsString(filteredRecipes);
 
-    // 3. Get All/Random Recipes (Filtered for Frontend)
+        } catch (Exception e) {
+            return "{\"error\": \"Search failed: " + e.getMessage() + "\"}";
+        }
+    }
+
+    // 2. Get AllRandom Recipes
     public String getAllRecipes(int number) {
         String url = UriComponentsBuilder.fromUriString(baseUrl)
                 .path("/recipes/random")
@@ -49,35 +64,32 @@ public class RecipeService {
                 .queryParam("number", number)
                 .toUriString();
 
-        // 1. Raw Response fetch kiya Spoonacular se
-        String rawJson = restClient.get()
-                .uri(url)
-                .retrieve()
-                .body(String.class);
-
         try {
-            // 2. Raw JSON ko Tree structure me convert kiya
+            // RestTemplate 
+            String rawJson = restTemplate.getForObject(url, String.class);
+
             JsonNode rootNode = objectMapper.readTree(rawJson);
             JsonNode recipesNode = rootNode.path("recipes");
 
-            // 3. Frontend ke liye ek naya clean Array banaya
             ArrayNode filteredRecipes = objectMapper.createArrayNode();
 
             if (recipesNode.isArray()) {
                 for (JsonNode recipe : recipesNode) {
                     ObjectNode cleanRecipe = objectMapper.createObjectNode();
                     
-                    // Sirf wahi fields nikali jo aapko chahiye
+                    cleanRecipe.put("id", recipe.path("id").asLong());
                     cleanRecipe.put("title", recipe.path("title").asText());
                     cleanRecipe.put("image", recipe.path("image").asText());
                     cleanRecipe.put("recipeLink", recipe.path("sourceUrl").asText());
-                    cleanRecipe.put("description", recipe.path("summary").asText()); // summary me description hota he
+                    
+                    // Summary se HTML tags clear karne ke liye
+                    String rawSummary = recipe.path("summary").asText("");
+                    String cleanSummary = rawSummary.replaceAll("<[^>]*>", "");
+                    cleanRecipe.put("description", cleanSummary);
 
                     filteredRecipes.add(cleanRecipe);
                 }
             }
-
-            // 4. Filtered JSON string return kar di
             return objectMapper.writeValueAsString(filteredRecipes);
 
         } catch (Exception e) {
@@ -85,61 +97,51 @@ public class RecipeService {
         }
     }
 
+    // 3. Get Detaile Recepe info
+    public String getRecipeDetails(Long id) {
+        String url = UriComponentsBuilder.fromUriString(baseUrl)
+                .path("/recipes/{id}/information")
+                .queryParam("apiKey", apiKey)
+                .buildAndExpand(id)
+                .toUriString();
 
+        try {
+            String rawJson = restTemplate.getForObject(url, String.class);
+            
+            JsonNode root = objectMapper.readTree(rawJson);
+            ObjectNode detailRecipe = objectMapper.createObjectNode();
 
+            // Basic Details
+            detailRecipe.put("id", root.path("id").asLong());
+            detailRecipe.put("title", root.path("title").asText());
+            detailRecipe.put("image", root.path("image").asText());
+            detailRecipe.put("readyInMinutes", root.path("readyInMinutes").asInt());
+            detailRecipe.put("servings", root.path("servings").asInt());
+            
+            // Instructions clean ki
+            String rawInstructions = root.path("instructions").asText("");
+            String cleanInstructions = rawInstructions.replaceAll("<[^>]*>", ""); 
+            detailRecipe.put("instructions", cleanInstructions);
 
-
-    // 2. Get Detailed Recipe Information by ID (Filtered for Frontend)
-public String getRecipeDetails(Long id) {
-    String url = UriComponentsBuilder.fromUriString(baseUrl)
-            .path("/recipes/{id}/information")
-            .queryParam("apiKey", apiKey)
-            .buildAndExpand(id)
-            .toUriString();
-
-    // Spoonacular se raw data fetched kiya
-    String rawJson = restClient.get()
-            .uri(url)
-            .retrieve()
-            .body(String.class);
-
-    try {
-        JsonNode root = objectMapper.readTree(rawJson);
-        ObjectNode detailRecipe = objectMapper.createObjectNode();
-
-        // Basic Info
-        detailRecipe.put("id", root.path("id").asLong());
-        detailRecipe.put("title", root.path("title").asText());
-        detailRecipe.put("image", root.path("image").asText());
-        detailRecipe.put("readyInMinutes", root.path("readyInMinutes").asInt());
-        detailRecipe.put("servings", root.path("servings").asInt());
-        
-        // Detailed Instructions (HTML tags clean karke)
-        String rawInstructions = root.path("instructions").asText("");
-        String cleanInstructions = rawInstructions.replaceAll("<[^>]*>", ""); 
-        detailRecipe.put("instructions", cleanInstructions);
-
-        // Ingredients Array nikalna aur filter karna
-        ArrayNode ingredientsArray = objectMapper.createArrayNode();
-        JsonNode extendedIngredients = root.path("extendedIngredients");
-        
-        if (extendedIngredients.isArray()) {
-            for (JsonNode ing : extendedIngredients) {
-                ObjectNode cleanIng = objectMapper.createObjectNode();
-                cleanIng.put("name", ing.path("name").asText());
-                cleanIng.put("amount", ing.path("amount").asDouble());
-                cleanIng.put("unit", ing.path("unit").asText());
-                ingredientsArray.add(cleanIng);
+            // Ingredients filter kiye
+            ArrayNode ingredientsArray = objectMapper.createArrayNode();
+            JsonNode extendedIngredients = root.path("extendedIngredients");
+            
+            if (extendedIngredients.isArray()) {
+                for (JsonNode ing : extendedIngredients) {
+                    ObjectNode cleanIng = objectMapper.createObjectNode();
+                    cleanIng.put("name", ing.path("name").asText());
+                    cleanIng.put("amount", ing.path("amount").asDouble());
+                    cleanIng.put("unit", ing.path("unit").asText());
+                    ingredientsArray.add(cleanIng);
+                }
             }
+            detailRecipe.set("ingredients", ingredientsArray);
+
+            return objectMapper.writeValueAsString(detailRecipe);
+
+        } catch (Exception e) {
+            return "{\"error\": \"Failed to get details: " + e.getMessage() + "\"}";
         }
-        detailRecipe.set("ingredients", ingredientsArray);
-
-        return objectMapper.writeValueAsString(detailRecipe);
-
-    } catch (Exception e) {
-        return "{\"error\": \"JSON Parsing failed: \"}";
     }
-}
-
-
 }

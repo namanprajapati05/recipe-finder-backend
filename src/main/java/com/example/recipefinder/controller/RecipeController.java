@@ -11,11 +11,12 @@ public class RecipeController {
 
     private final RecipeService recipeService;
 
-    
+   
     public RecipeController(RecipeService recipeService) {
         this.recipeService = recipeService;
     }
 
+   
     @GetMapping("/search")
     public ResponseEntity<String> search(@RequestParam String query) {
         try {
@@ -26,6 +27,18 @@ public class RecipeController {
         }
     }
 
+   
+    @GetMapping("/random") 
+    public ResponseEntity<String> getAll(@RequestParam(defaultValue = "10") int number) {
+        try {
+            String filteredData = recipeService.getAllRecipes(number);
+            return ResponseEntity.ok(filteredData);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("{\"error\": \"" + e.getMessage() + "\"}");
+        }
+    }
+
+   
     @GetMapping("/{id}")
     public ResponseEntity<String> getDetails(@PathVariable Long id) {
         try {
@@ -35,18 +48,4 @@ public class RecipeController {
             return ResponseEntity.status(500).body("{\"error\": \"" + e.getMessage() + "\"}");
         }
     }
-
-
-
-@GetMapping
-public ResponseEntity<String> getAll(@RequestParam(defaultValue = "10") int number) {
-    try {
-        String filteredData = recipeService.getAllRecipes(number);
-        return ResponseEntity.ok(filteredData);
-    } catch (Exception e) {
-        return ResponseEntity.status(500).body("{\"error\": \"" + e.getMessage() + "\"}");
-    }
-}
-
-
 }

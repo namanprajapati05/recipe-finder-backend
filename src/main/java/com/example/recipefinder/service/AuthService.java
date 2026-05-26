@@ -9,52 +9,47 @@ import org.springframework.stereotype.Service;
 public class AuthService {
 
     private final UserRepository userRepository;
-
-    private final BCryptPasswordEncoder encoder =
-            new BCryptPasswordEncoder();
+    
+   
+    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     public AuthService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 
+    // 1. Signup Method
     public String signup(User user) {
-
-        User existingUser =
-                userRepository.findByEmail(user.getEmail()).orElse(null);
+   
+        User existingUser = userRepository.findByEmail(user.getEmail()).orElse(null);
 
         if (existingUser != null) {
             return "Email already exists";
         }
 
-        user.setPassword(
-                encoder.encode(user.getPassword())
-        );
-
+       
+        user.setPassword(encoder.encode(user.getPassword()));
         userRepository.save(user);
 
         return "User Registered Successfully";
     }
 
-
-
+    // 2. Login Method
     public String login(User user) {
+       
+        User existingUser = userRepository.findByEmail(user.getEmail()).orElse(null);
 
-    User existingUser =
-            userRepository.findByEmail(user.getEmail()).orElse(null);
+        if (existingUser == null) {
+            return "User not found";
+        }
 
-    if(existingUser == null){
-        return "User not found";
+      
+        boolean isMatch = encoder.matches(user.getPassword(), existingUser.getPassword());
+
+        if (!isMatch) {
+            return "Invalid Password";
+        }
+
+     
+        return existingUser.getUsername();
     }
-
-    boolean isMatch = encoder.matches(
-            user.getPassword(),
-            existingUser.getPassword()
-    );
-
-    if(!isMatch){
-        return "Invalid Password";
-    }
-
-    return "Login Successful";
-}
 }
